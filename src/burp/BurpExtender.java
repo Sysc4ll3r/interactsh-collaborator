@@ -22,321 +22,349 @@ import burp.api.montoya.BurpExtension;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.extension.ExtensionUnloadingHandler;
 
-
 public class BurpExtender implements BurpExtension, ContextMenuItemsProvider, ExtensionUnloadingHandler {
-    public static MontoyaApi api;
-    public static int pollTime = 60;
-    public static InteractshTab tab;
-    private static ArrayList<Client> clients = new ArrayList<Client>();
-    private InteractshListener listener = new InteractshListener();
+	public static MontoyaApi api;
+	public static int pollTime = 60;
+	public static InteractshTab tab;
+	private static ArrayList<Client> clients = new ArrayList<Client>();
+	private InteractshListener listener = new InteractshListener();
 
-    @Override
-    public void initialize(MontoyaApi api) {
-        this.api = api;
-        api.extension().setName("Interactsh Collaborator");
-        api.userInterface().registerContextMenuItemsProvider(this);
-        api.extension().registerUnloadingHandler(this);
+	@Override
+	public void initialize(MontoyaApi api) {
+		this.api = api;
+		api.extension().setName("Interactsh Collaborator");
+		api.userInterface().registerContextMenuItemsProvider(this);
+		api.extension().registerUnloadingHandler(this);
 
-        api.logging().logToOutput("Starting Interactsh Collaborator!");
+		api.logging().logToOutput("Starting Interactsh Collaborator!");
 
-        burp.gui.Config.generateConfig();
-        tab = new InteractshTab(api, listener, clients);
-        burp.gui.Config.loadConfig();
+		burp.gui.Config.generateConfig();
+		tab = new InteractshTab(api, listener, clients);
+		burp.gui.Config.loadConfig();
 
-        api.userInterface().registerSuiteTab("Interactsh", tab);
-    }
+		api.userInterface().registerSuiteTab("Interactsh", tab);
+	}
 
-    @Override
-    public void extensionUnloaded() {
-        if (listener != null) {
-            // Get all threads and stop them.
-            listener.running = false;
-            try {
-                TimeUnit.SECONDS.sleep(1);
-            } catch (InterruptedException e) {
-            }
-            for (int i = 0; i < listener.pollers.size(); i++) {
-                listener.pollers.get(i).interrupt();
-            }
+	@Override
+	public void extensionUnloaded() {
+		if (listener != null) {
+			// Get all threads and stop them.
+			listener.running = false;
+			try {
+				TimeUnit.SECONDS.sleep(1);
+			} catch (InterruptedException e) {
+			}
+			for (int i = 0; i < listener.pollers.size(); i++) {
+				listener.pollers.get(i).interrupt();
+			}
 
-            // Tell all clients to deregister
-            for (int i = 0; i < clients.size(); i++) {
-                clients.get(i).deregister();
-            }
-        }
-        api.logging().logToOutput("Thanks for collaborating!");
-    }
+			// Tell all clients to deregister
+			for (int i = 0; i < clients.size(); i++) {
+				clients.get(i).deregister();
+			}
+		}
+		api.logging().logToOutput("Thanks for collaborating!");
+	}
 
-    public ArrayList<Client> getClients() {
-        return clients;
-    }
+	public ArrayList<Client> getClients() {
+		return clients;
+	}
 
-    public static void addClient(Client c) {
-        clients.add(c);
-    }
+	public static void addClient(Client c) {
+		clients.add(c);
+	}
 
-    public static int getPollTime() {
-        try {
-            return Integer.parseInt(tab.getPollField().getText());
-        } catch (Exception ex) {
-        }
-        return 60;
-    }
+	public static int getPollTime() {
+		try {
+			return Integer.parseInt(tab.getPollField().getText());
+		} catch (Exception ex) {
+		}
+		return 60;
+	}
 
-    public static void updatePollTime(int poll) {
-        pollTime = poll;
-    }
+	public static void updatePollTime(int poll) {
+		pollTime = poll;
+	}
 
-    public static void addToTable(InteractEntry i) {
-        tab.addToTable(i);
-    }
+	public static void addToTable(InteractEntry i) {
+		tab.addToTable(i);
+	}
 
-    //
-    // implement ContextMenuItemsProvider
-    //
+	//
+	// implement ContextMenuItemsProvider
+	//
 
-    @Override
-    public List<Component> provideMenuItems(ContextMenuEvent event) {
-        List<Component> menuList = new ArrayList<Component>();
-        JMenuItem item = new JMenuItem("Generate Interactsh url");
-        item.addActionListener(new InteractshListener());
-        menuList.add(item);
+	@Override
+	public List<Component> provideMenuItems(ContextMenuEvent event) {
+		List<Component> menuList = new ArrayList<Component>();
+		JMenuItem item = new JMenuItem("Generate Interactsh url");
+		item.addActionListener(new InteractshListener());
+		menuList.add(item);
 
-        return menuList;
-    }
+		return menuList;
+	}
 
-    public class InteractshTab extends JComponent {
-        private JTabbedPane mainPane;
-        private JSplitPane splitPane;
-        private JScrollPane scrollPane;
-        private JSplitPane tableSplitPane;
-        private JPanel resultsPanel;
-        private JTextField pollField;
-        private Table logTable;
-        private static JTextField serverText;
-        private static JTextField portText;
-        private static JTextField authText;
-        private static JCheckBox tlsBox;
-        private List<InteractEntry> log = new ArrayList<InteractEntry>();
-        private InteractshListener listener;
-        private ArrayList<Client> clients;
+	public class InteractshTab extends JComponent {
+		private JTabbedPane mainPane;
+		private JSplitPane splitPane;
+		private JScrollPane scrollPane;
+		private JSplitPane tableSplitPane;
+		private JPanel resultsPanel;
+		private JTextField pollField;
+		private Table logTable;
+		private static JTextField serverText;
+		private static JTextField portText;
+		private static JTextField authText;
+		private static JCheckBox tlsBox;
+		private List<InteractEntry> log = new ArrayList<InteractEntry>();
+		private InteractshListener listener;
+		private ArrayList<Client> clients;
 
-        public InteractshTab(MontoyaApi api, InteractshListener listener, ArrayList<Client> clients) {
-            this.listener = listener;
-            this.clients = clients;
+		public InteractshTab(MontoyaApi api, InteractshListener listener, ArrayList<Client> clients) {
+			this.listener = listener;
+			this.clients = clients;
 
-            setLayout(new BoxLayout(this, BoxLayout.PAGE_AXIS));
+			setLayout(new BoxLayout(this, BoxLayout.PAGE_AXIS));
 
-            mainPane = new JTabbedPane();
-            splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
-            mainPane.addTab("Logs", splitPane);
+			mainPane = new JTabbedPane();
+			splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
+			mainPane.addTab("Logs", splitPane);
 
-            resultsPanel = new JPanel();
-            tableSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
-            logTable = new Table(new LogTable());
-            scrollPane = new JScrollPane(logTable);
+			resultsPanel = new JPanel();
+			tableSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
+			logTable = new Table(new LogTable());
+			scrollPane = new JScrollPane(logTable);
 
-            tableSplitPane.setTopComponent(scrollPane);
-            tableSplitPane.setBottomComponent(resultsPanel);
-            splitPane.setBottomComponent(tableSplitPane);
+			tableSplitPane.setTopComponent(scrollPane);
+			tableSplitPane.setBottomComponent(resultsPanel);
+			splitPane.setBottomComponent(tableSplitPane);
 
-            JPanel panel = new JPanel();
-            JButton CollaboratorButton = new JButton("Generate Interactsh url");
-            JLabel pollLabel = new JLabel("Poll Time: ");
-            pollField = new JTextField("60", 4);
-            pollField.getDocument().addDocumentListener(new PollTimeListener());
+			JPanel panel = new JPanel();
+			JButton CollaboratorButton = new JButton("Generate Interactsh url");
+			JLabel pollLabel = new JLabel("Poll Time: ");
+			pollField = new JTextField("60", 4);
+			pollField.getDocument().addDocumentListener(new PollTimeListener());
 
-            CollaboratorButton.addActionListener(listener);
-            panel.add(CollaboratorButton);
-            panel.add(pollLabel);
-            panel.add(pollField);
-            splitPane.setTopComponent(panel);
+			JButton pollNowButton = new JButton("Poll Now"); // New button - Poll Now
+			var thiz = this;
+			pollNowButton.addActionListener(new ActionListener() {
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					thiz.pollNow();
+				}
+			});
 
-            // Configuration pane
-            JPanel configPanel = new JPanel();
-            configPanel.setLayout(new BoxLayout(configPanel, BoxLayout.Y_AXIS));
-            JPanel subConfigPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-            mainPane.addTab("Configuration", configPanel);
-            configPanel.add(subConfigPanel);
-            JPanel innerConfig = new JPanel();
-            subConfigPanel.setMaximumSize(new Dimension(configPanel.getMaximumSize().width, 150));
-            innerConfig.setLayout(new SpringLayout());
-            subConfigPanel.add(innerConfig);
+			CollaboratorButton.addActionListener(listener);
+			panel.add(CollaboratorButton);
+			panel.add(pollLabel);
+			panel.add(pollField);
+			panel.add(pollNowButton); // Add Poll Now Button to panel
 
-            serverText = new JTextField("oast.pro", 20);
-            portText = new JTextField("443", 20);
-            authText = new JTextField("", 20);
-            tlsBox = new JCheckBox("", true);
+			splitPane.setTopComponent(panel);
 
-            JLabel server = new JLabel("Server: ");
-            innerConfig.add(server);
-            server.setLabelFor(serverText);
-            innerConfig.add(serverText);
+			// Configuration pane
+			JPanel configPanel = new JPanel();
+			configPanel.setLayout(new BoxLayout(configPanel, BoxLayout.Y_AXIS));
+			JPanel subConfigPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+			mainPane.addTab("Configuration", configPanel);
+			configPanel.add(subConfigPanel);
+			JPanel innerConfig = new JPanel();
+			subConfigPanel.setMaximumSize(new Dimension(configPanel.getMaximumSize().width, 150));
+			innerConfig.setLayout(new SpringLayout());
+			subConfigPanel.add(innerConfig);
 
-            JLabel port = new JLabel("Port: ");
-            innerConfig.add(port);
-            port.setLabelFor(portText);
-            innerConfig.add(portText);
+			serverText = new JTextField("oast.pro", 20);
+			portText = new JTextField("443", 20);
+			authText = new JTextField("", 20);
+			tlsBox = new JCheckBox("", true);
 
-            JLabel auth = new JLabel("Authorization: ");
-            innerConfig.add(auth);
-            auth.setLabelFor(authText);
-            innerConfig.add(authText);
+			JLabel server = new JLabel("Server: ");
+			innerConfig.add(server);
+			server.setLabelFor(serverText);
+			innerConfig.add(serverText);
 
-            JLabel tls = new JLabel("TLS: ");
-            innerConfig.add(tls);
-            tls.setLabelFor(tlsBox);
-            innerConfig.add(tlsBox);
+			JLabel port = new JLabel("Port: ");
+			innerConfig.add(port);
+			port.setLabelFor(portText);
+			innerConfig.add(portText);
 
-            JButton updateConfigButton = new JButton("Update Settings");
-            updateConfigButton.addActionListener(new ActionListener() {
-                public void actionPerformed(ActionEvent e) {
-                    burp.gui.Config.updateConfig();
-                }
-            });
-            innerConfig.add(updateConfigButton);
+			JLabel auth = new JLabel("Authorization: ");
+			innerConfig.add(auth);
+			auth.setLabelFor(authText);
+			innerConfig.add(authText);
 
-            // Add a blank panel so that SpringUtilities can make a well shaped grid
-            innerConfig.add(new JPanel());
+			JLabel tls = new JLabel("TLS: ");
+			innerConfig.add(tls);
+			tls.setLabelFor(tlsBox);
+			innerConfig.add(tlsBox);
 
-            SpringUtilities.makeCompactGrid(innerConfig,
-                    5, 2, //rows, cols
-                    6, 6,        //initX, initY
-                    6, 6);       //xPad, yPad
+			JButton updateConfigButton = new JButton("Update Settings");
+			updateConfigButton.addActionListener(new ActionListener() {
+				public void actionPerformed(ActionEvent e) {
+					burp.gui.Config.updateConfig();
+				}
+			});
+			innerConfig.add(updateConfigButton);
 
-            JPanel documentationPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-            JLabel help = new JLabel("Check out https://github.com/projectdiscovery/interactsh for an up to date list of public Interactsh servers", SwingConstants.LEFT);
-            documentationPanel.setAlignmentY(Component.TOP_ALIGNMENT);
-            documentationPanel.add(help);
-            configPanel.add(documentationPanel);
+			// Add a blank panel so that SpringUtilities can make a well shaped grid
+			innerConfig.add(new JPanel());
 
-            add(mainPane);
-        }
+			SpringUtilities.makeCompactGrid(innerConfig,
+					5, 2, // rows, cols
+					6, 6, // initX, initY
+					6, 6); // xPad, yPad
 
-        public static String getServerText() {
-            return serverText.getText();
-        }
+			JPanel documentationPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+			JLabel help = new JLabel(
+					"Check out https://github.com/projectdiscovery/interactsh for an up to date list of public Interactsh servers",
+					SwingConstants.LEFT);
+			documentationPanel.setAlignmentY(Component.TOP_ALIGNMENT);
+			documentationPanel.add(help);
+			configPanel.add(documentationPanel);
 
-        public static void setServerText(String t) {
-            serverText.setText(t);
-        }
+			add(mainPane);
+		}
 
-        public static String getPortText() {
-            return portText.getText();
-        }
+		private void pollNow() {
+			new Thread(new Runnable() {
+				@Override
+				public void run() {
+					for (Client client : clients) {
+						try {
+							client.poll();
+						} catch (Exception e) {
+							e.printStackTrace();
+						}
+					}
+				}
+			}).start();
+		}
 
-        public static void setPortText(String text) {
-            portText.setText(text);
-        }
+		public static String getServerText() {
+			return serverText.getText();
+		}
 
-        public static String getAuthText() {
-            return authText.getText();
-        }
+		public static void setServerText(String t) {
+			serverText.setText(t);
+		}
 
-        public static void setAuthText(String text) {
-            authText.setText(text);
-        }
+		public static String getPortText() {
+			return portText.getText();
+		}
 
-        public static String getTlsBox() {
-            return Boolean.toString(tlsBox.isSelected());
-        }
+		public static void setPortText(String text) {
+			portText.setText(text);
+		}
 
-        public static void setTlsBox(boolean value) {
-            tlsBox.setSelected(value);
-        }
+		public static String getAuthText() {
+			return authText.getText();
+		}
 
-        public JTextField getPollField() {
-            return pollField;
-        }
+		public static void setAuthText(String text) {
+			authText.setText(text);
+		}
 
-        public void addToTable(InteractEntry i) {
-            log.add(i);
-            logTable.revalidate();
-        }
+		public static String getTlsBox() {
+			return Boolean.toString(tlsBox.isSelected());
+		}
 
-        //
-        // extend JTable to handle cell selection
-        //
+		public static void setTlsBox(boolean value) {
+			tlsBox.setSelected(value);
+		}
 
-        private class Table extends JTable {
-            public TableModel tableModel;
+		public JTextField getPollField() {
+			return pollField;
+		}
 
-            public Table(TableModel tableModel) {
-                super(tableModel);
-                this.tableModel = tableModel;
-            }
+		public void addToTable(InteractEntry i) {
+			log.add(i);
+			logTable.revalidate();
+		}
 
-            @Override
-            public void changeSelection(int row, int col, boolean toggle, boolean extend) {
-                // show the log entry for the selected row
-                InteractEntry ie = log.get(row);
+		//
+		// extend JTable to handle cell selection
+		//
 
-                resultsPanel.removeAll(); // Refresh pane
-                resultsPanel.setLayout(new BorderLayout());  //give your JPanel a BorderLayout
+		private class Table extends JTable {
+			public TableModel tableModel;
 
-                JTextArea text = new JTextArea(ie.details);
-                JScrollPane scroll = new JScrollPane(text); //place the JTextArea in a scroll pane
-                resultsPanel.add(scroll, BorderLayout.CENTER); //add the JScrollPane to the panel
-                tableSplitPane.revalidate();
+			public Table(TableModel tableModel) {
+				super(tableModel);
+				this.tableModel = tableModel;
+			}
 
-                super.changeSelection(row, col, toggle, extend);
-            }
-        }
+			@Override
+			public void changeSelection(int row, int col, boolean toggle, boolean extend) {
+				// show the log entry for the selected row
+				InteractEntry ie = log.get(row);
 
-        //
-        // implement AbstractTableModel
-        //
+				resultsPanel.removeAll(); // Refresh pane
+				resultsPanel.setLayout(new BorderLayout()); // give your JPanel a BorderLayout
 
-        private class LogTable extends AbstractTableModel {
+				JTextArea text = new JTextArea(ie.details);
+				JScrollPane scroll = new JScrollPane(text); // place the JTextArea in a scroll pane
+				resultsPanel.add(scroll, BorderLayout.CENTER); // add the JScrollPane to the panel
+				tableSplitPane.revalidate();
 
-            @Override
-            public int getRowCount() {
-                return log.size();
-            }
+				super.changeSelection(row, col, toggle, extend);
+			}
+		}
 
-            @Override
-            public int getColumnCount() {
-                return 4;
-            }
+		//
+		// implement AbstractTableModel
+		//
 
-            @Override
-            public String getColumnName(int columnIndex) {
-                switch (columnIndex) {
-                    case 0:
-                        return "Entry";
-                    case 1:
-                        return "Type";
-                    case 2:
-                        return "Address";
-                    case 3:
-                        return "Time";
-                    default:
-                        return "";
-                }
-            }
+		private class LogTable extends AbstractTableModel {
 
-            @Override
-            public Class<?> getColumnClass(int columnIndex) {
-                return String.class;
-            }
+			@Override
+			public int getRowCount() {
+				return log.size();
+			}
 
-            @Override
-            public Object getValueAt(int rowIndex, int columnIndex) {
-                InteractEntry ie = log.get(rowIndex);
+			@Override
+			public int getColumnCount() {
+				return 4;
+			}
 
-                switch (columnIndex) {
-                    case 0:
-                        return ie.uid;
-                    case 1:
-                        return ie.protocol;
-                    case 2:
-                        return ie.address;
-                    case 3:
-                        return ie.timestamp;
-                    default:
-                        return "";
-                }
-            }
-        }
-    }
+			@Override
+			public String getColumnName(int columnIndex) {
+				switch (columnIndex) {
+					case 0:
+						return "Entry";
+					case 1:
+						return "Type";
+					case 2:
+						return "Address";
+					case 3:
+						return "Time";
+					default:
+						return "";
+				}
+			}
+
+			@Override
+			public Class<?> getColumnClass(int columnIndex) {
+				return String.class;
+			}
+
+			@Override
+			public Object getValueAt(int rowIndex, int columnIndex) {
+				InteractEntry ie = log.get(rowIndex);
+
+				switch (columnIndex) {
+					case 0:
+						return ie.uid;
+					case 1:
+						return ie.protocol;
+					case 2:
+						return ie.address;
+					case 3:
+						return ie.timestamp;
+					default:
+						return "";
+				}
+			}
+
+		}
+	}
 }
